@@ -21,14 +21,14 @@ func NewClient(name, network, address string) (*Client, error) {
 		Network: network,
 		Address: address,
 	}
-	err := c.redial()
+	err := c.redial(0)
 	if err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (c *Client) redial() error {
+func (c *Client) redial(trialNumber int) error {
 	if c.c != nil {
 		err := c.c.Close()
 		c.c = nil
@@ -36,15 +36,15 @@ func (c *Client) redial() error {
 			return err
 		}
 	}
-	return c.tryDialing()
+	return c.tryDialing(trialNumber)
 }
 
-func (c *Client) tryDialing() error {
+func (c *Client) tryDialing(trialNumber int) error {
 	var err error
 	c.c, err = rpc.Dial(c.Network, c.Address)
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "connection refused") {
-			log.Printf("Unable to reach %s rpc server. Trying again later.", c.Name)
+			log.Printf("Unable to reach %s rpc server [trial %d]. Trying again later.", c.Name, trialNumber)
 			return nil
 		}
 		return err
@@ -63,10 +63,10 @@ func (c *Client) Call(serviceMethod string, args interface{}, reply interface{})
 		}
 	}
 	var err error
-	for _, duration := range waitIntervals {
+	for i, duration := range waitIntervals {
 		log.Printf("%s rpc client recovering...", c.Name)
 		time.Sleep(duration)
-		err = c.redial()
+		err = c.redial(i)
 		if err != nil {
 			return err
 		}
